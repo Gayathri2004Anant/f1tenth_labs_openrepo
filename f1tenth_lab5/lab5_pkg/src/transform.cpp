@@ -290,7 +290,7 @@ void updateTransform(vector<Correspondence> &corresponds, Transform &curr_trans)
   for (int i = 0; i < number_iter; i++)
   {
 
-    // Fill in the values of the matrics
+    // Fill in the values of the matrices
     Eigen::MatrixXf M_i(2, 4);
     Eigen::Matrix2f C_i;
     Eigen::Vector2f pi_i;
@@ -305,21 +305,45 @@ void updateTransform(vector<Correspondence> &corresponds, Transform &curr_trans)
     // Calculate M and g
     for (Correspondence c : corresponds)
     {
+      M_i << 1, 0, c.po->getX(), -1*c.po->getY(), 0, 1, c.po->getY(), c.po->getX();
+      Eigen::Vector2f n_i = c.getNormalNorm();
+      C_i = n_i*n_i.transpose();
+      pi_i << c.pix, c.piy;
+      M += M_i.transpose()* C_i * M_i;
+      g -= 2*pi_i.transpose()* C_i * M_i;
     }
 
     // Define sub-matrices A, B, D from M
     Eigen::Matrix2f A, B, D;
+    A = M.block(0, 0, 2, 2);
+    B = M.block(0, 2, 2, 4);
+    D = M.block(2, 2, 4, 4);
+    A = 2*A;
+    B = 2*B;
+    D = 2*D;
 
     //define S and S_A matrices from the matrices A B and D
     Eigen::Matrix2f S;
     Eigen::Matrix2f S_A;
-    float S_tr = S(0, 0) + S(1, 1);
+    S = D - B.transpose()*A.inverse() * B;
     float S_det = S(0, 0) * S(1, 1) - S(1, 0) * S(0, 1);
+    float S_tr = S(0, 0) + S(1, 1);
+    S_A = S_det * S.inverse();
 
     //find the coefficients of the quadratic function of lambda
-    float pow_2;
-    float pow_1;
-    float pow_0;
+    //use the bada vala equation, plug in all values
+    Eigen::Matrix2f temp1;
+    Eigen::Matrix2f temp2;
+    Eigen::Matrix2f temp3;
+    temp1 << A.inverse()*B*B.transpose()*(A.transpose()).inverse(), A.inverse()*B*-1, A.inverse()*B*-1, (1,0,0,1);
+    temp2 << A.inverse()*B*S_A*B.transpose()*(A.transpose()).inverse(), -1*A.inverse()*B*S_A, -1*A.inverse()*B*S_A, S_A;
+    temp3 << A.inverse()*B*S_A.transpose()*S_A*B.transpose()*(A.transpose()).inverse(), -1*A.inverse()*B*S_A.transpose()*S_A,  -1*A.inverse()*B*S_A.transpose()*S_A, S_A.transpose()*S_A;
+    temp1 = (float)4* g.transpose()*temp1*g;
+    float pow_2 = temp1(0,0);
+    temp2 = (float)4* g.transpose()*temp2*g;
+    float pow_1 = temp2(0,0);
+    temp3 = g.transpose()*temp3*g;
+    float pow_0 = temp3(0,0);
 
     // find the value of lambda by solving the equation formed. You can use the greatest real root function
     // float lambda = greatest_real_root(-16, -16 * S_tr, pow_2, pow_1, pow_0);
